@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeAHCM AI Design</title>
+    <style>
+        /* --- 기본 스타일 (CSS) --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f6;
+            color: #333;
+            margin: 0;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        header {
+            text-align: center;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        h1 {
+            color: #1a2a6c; /* SeAH 그룹 색상 느낌 */
+            margin: 0;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        .panel {
+            padding: 1.5rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #0d1b2a;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        select, button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            margin-bottom: 1rem;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+        }
+        .image-placeholder {
+            width: 100%;
+            aspect-ratio: 1 / 1; /* 정사각형 비율 */
+            background-color: #f8f9fa;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .image-placeholder img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: cover;
+        }
+        .image-placeholder p {
+            color: #888;
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #007bff;
+            animation: spin 1s ease infinite;
+            display: none; /* 평소엔 숨김 */
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>SeAHCM AI Design</h1>
+            <p>왼쪽에서 원하는 디자인을 선택하고 '이미지 생성하기' 버튼을 누르세요.</p>
+        </header>
+
+        <div class="main-content">
+            <div class="panel">
+                <h2>1. 디자인 선택</h2>
+                <select id="image-select">
+                    <option>이미지 목록을 불러오는 중...</option>
+                </select>
+                <h3>선택된 디자인 미리보기</h3>
+                <div id="preview-placeholder" class="image-placeholder">
+                    <p>디자인을 선택하면 여기에 미리보기가 표시됩니다.</p>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>2. AI 이미지 생성</h2>
+                <button id="generate-btn">AI로 건축물 이미지 생성하기 🚀</button>
+                <h3>AI 생성 결과</h3>
+                <div id="result-placeholder" class="image-placeholder">
+                     <div id="spinner" class="spinner"></div>
+                    <p id="result-text">버튼을 누르면 생성된 이미지가 여기에 표시됩니다.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // --- 핵심 로직 (JavaScript) ---
+
+    // 백엔드 서버 주소
+    const API_BASE_URL = "http://127.0.0.1:5000";
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // HTML 요소 가져오기
+        const imageSelect = document.getElementById("image-select");
+        const previewPlaceholder = document.getElementById("preview-placeholder");
+        const resultPlaceholder = document.getElementById("result-placeholder");
+        const generateBtn = document.getElementById("generate-btn");
+        const spinner = document.getElementById("spinner");
+        const resultText = document.getElementById("result-text");
+
+        // 페이지 로드 시, 백엔드에서 이미지 목록 가져와서 드롭다운 채우기
+        fetch(`${API_BASE_URL}/get-images`)
+            .then(response => response.json())
+            .then(imageFiles => {
+                imageSelect.innerHTML = '<option value="">-- 디자인을 선택하세요 --</option>'; // 기본 옵션
+                imageFiles.forEach(file => {
+                    const option = document.createElement("option");
+                    option.value = file;
+                    option.textContent = file;
+                    imageSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error("Error fetching images:", error);
+                imageSelect.innerHTML = '<option>이미지를 불러올 수 없습니다.</option>';
+            });
+
+        // 드롭다운에서 이미지를 선택하면 미리보기 업데이트
+        imageSelect.addEventListener("change", () => {
+            const selectedFile = imageSelect.value;
+            if (selectedFile) {
+                previewPlaceholder.innerHTML = `<img src="${API_BASE_URL}/img/${selectedFile}" alt="Preview">`;
+            } else {
+                previewPlaceholder.innerHTML = '<p>디자인을 선택하면 여기에 미리보기가 표시됩니다.</p>';
+            }
+        });
+
+        // '이미지 생성하기' 버튼 클릭 이벤트
+        generateBtn.addEventListener("click", () => {
+            const selectedFile = imageSelect.value;
+            if (!selectedFile) {
+                alert("먼저 왼쪽에서 디자인을 선택해주세요.");
+                return;
+            }
+
+            // 로딩 상태 시작
+            generateBtn.disabled = true;
+            generateBtn.textContent = "AI가 디자인하는 중...";
+            spinner.style.display = 'block';
+            resultText.style.display = 'none';
+            resultPlaceholder.querySelector('img')?.remove(); // 이전 이미지 제거
+
+            // 백엔드에 이미지 생성 요청 보내기
+            fetch(`${API_BASE_URL}/generate-image`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ filename: selectedFile }),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`서버 오류: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.image) {
+                    resultPlaceholder.innerHTML = `<img src="${data.image}" alt="Generated Building">`;
+                } else {
+                    throw new Error(data.error || "응답에서 이미지를 찾을 수 없습니다.");
+                }
+            })
+            .catch(error => {
+                console.error("Error generating image:", error);
+                alert(`이미지 생성 중 오류가 발생했습니다: ${error.message}`);
+                resultPlaceholder.innerHTML = '<p>오류가 발생했습니다. 다시 시도해주세요.</p>';
+            })
+            .finally(() => {
+                // 로딩 상태 종료
+                generateBtn.disabled = false;
+                generateBtn.textContent = "AI로 건축물 이미지 생성하기 🚀";
+                spinner.style.display = 'none';
+                if (!resultPlaceholder.querySelector('img')) {
+                    resultText.style.display = 'block';
+                    resultText.textContent = "버튼을 누르면 생성된 이미지가 여기에 표시됩니다.";
+                }
+            });
+        });
+    });
+    </script>
+</body>
+</html>
